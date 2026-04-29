@@ -1,0 +1,53 @@
+# Пример пайплайна для lab2 — три обязательных стейджа.
+# Этот файл — отправная точка; адаптируйте названия скриптов и команды под свой пайплайн.
+
+stages:
+  - prepare-dataset
+  - train
+  - test
+
+default:
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet -r requirements.txt
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: pip-$CI_COMMIT_REF_SLUG
+  paths:
+    - .cache/pip
+
+prepare-dataset:
+  stage: prepare-dataset
+  script:
+    - python data_collection.py
+    - python data_preprocessing.py
+  artifacts:
+    paths:
+      - data/
+    expire_in: 1 week
+
+train:
+  stage: train
+  needs:
+    - prepare-dataset
+  script:
+    - python model_training.py
+  artifacts:
+    paths:
+      - models/
+    expire_in: 1 week
+
+test:
+  stage: test
+  needs:
+    - prepare-dataset
+    - train
+  script:
+    - python model_testing.py
+  artifacts:
+    paths:
+      - logs/
+    expire_in: 1 week

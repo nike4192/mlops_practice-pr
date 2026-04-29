@@ -1,0 +1,7 @@
+data/
+logs/
+models/
+.cache/
+__pycache__/
+*.pyc
+*.pyo

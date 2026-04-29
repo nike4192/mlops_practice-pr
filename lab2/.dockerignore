@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+data/
+logs/
+models/
+.cache/
+.gitlab-ci.yml
+README.md
+*.md
