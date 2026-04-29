@@ -1,5 +1,10 @@
-# Пример пайплайна для lab2 — три обязательных стейджа.
-# Этот файл — отправная точка; адаптируйте названия скриптов и команды под свой пайплайн.
+# Каркас пайплайна для lab2 — три обязательных стейджа.
+#
+# Этот файл уезжает в локальный GitLab через `git subtree push --prefix=lab2 gitlab main`,
+# поэтому в проекте lab2-mlops он окажется в КОРНЕ репозитория (а не в подпапке lab2/).
+# Из-за этого все пути ниже — короткие: data/, models/, logs/ — без префикса lab2/.
+#
+# script: блоки оставлены пустыми намеренно — заполните их вызовами своих скриптов.
 
 stages:
   - prepare-dataset
@@ -22,8 +27,10 @@ cache:
 prepare-dataset:
   stage: prepare-dataset
   script:
-    - python data_collection.py
-    - python data_preprocessing.py
+    # TODO: запустите свои скрипты сбора и предобработки данных,
+    #       результат должен оказаться в папке data/
+    - echo "TODO: replace with your data collection / preprocessing commands"
+    - exit 1
   artifacts:
     paths:
       - data/
@@ -34,7 +41,9 @@ train:
   needs:
     - prepare-dataset
   script:
-    - python model_training.py
+    # TODO: запустите обучение модели, сериализованная модель должна попасть в models/
+    - echo "TODO: replace with your training command"
+    - exit 1
   artifacts:
     paths:
       - models/
@@ -46,7 +55,9 @@ test:
     - prepare-dataset
     - train
   script:
-    - python model_testing.py
+    # TODO: прогоните модель на тестовых данных, метрики/отчёт сохраните в logs/
+    - echo "TODO: replace with your testing command"
+    - exit 1
   artifacts:
     paths:
       - logs/

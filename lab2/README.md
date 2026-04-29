@@ -5,7 +5,8 @@
 > **Что в этой папке — шаблон, а не готовое решение.**
 > ML-скрипты (`data_collection.py`, `data_preprocessing.py`, `model_training.py`, `model_testing.py`) пишете вы сами по требованиям модуля 2 (см. корневой `README.md`). Они опираются на скрипты из lab1, которые уже у вас есть.
 >
-> Из коробки даны: инфраструктура локального GitLab (`gitlab-compose.yml`) и пример каркаса пайплайна (`.gitlab-ci.yml`, `Dockerfile`, `requirements.txt`) — адаптируйте под свой набор скриптов.
+> Из коробки даны: инфраструктура локального GitLab (`gitlab-compose.yml`) и каркас пайплайна (`.gitlab-ci.yml`, `Dockerfile`, `requirements.txt`).
+> В `.gitlab-ci.yml` блоки `script:` намеренно оставлены в виде `# TODO` + `exit 1` — заполните их вызовами своих скриптов, иначе job'ы не пройдут. Структура (`stages`, `image`, `before_script`, `artifacts`, `needs`) уже расставлена.
 
 ---
 
@@ -55,7 +56,9 @@ docker run --rm -v "$(pwd)/_run:/app/_run" -w /app/_run lab2 bash -c "
 
 ---
 
-# Запуск в локальном GitLab — основной путь сдачи
+# Запуск в локальном GitLab — проверка CI
+
+> Локальный GitLab нужен только чтобы убедиться, что ваш `.gitlab-ci.yml` корректно прогоняется в реальном CI-окружении. **Сдаёт работу студент в GitHub** (Шаг 8) — преподавателю нужен PR в `mlops_practice` со скриншотами зелёного pipeline из локального GitLab.
 
 > **Нужен Docker.** Если ещё не установлен:
 > [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) или
@@ -166,25 +169,84 @@ docker exec -it gitlab-runner gitlab-runner register \
 
 > Обратите внимание: в строке runner'а слева — зелёный кружок (статус **online**) и тег `docker`.
 
-## Шаг 5. Залить код в проект
+## Шаг 5. Подготовить ветку `lab2` в вашем форке `mlops_practice`
 
-Подготовьте папку с вашим вариантом lab2: ваши ML-скрипты + адаптированный `.gitlab-ci.yml` + `Dockerfile` + `requirements.txt`. **Не кладите** туда `gitlab-compose.yml` — это инфраструктура, не часть проекта.
-
-Инициализируйте git и push:
+Вы работаете **в своём GitHub-форке** репозитория `mlops_practice` (где уже лежит `lab1/`). Там `origin` уже настроен на GitHub:
 
 ```bash
-cd /путь/к/вашему/lab2
-git init -b main
-git add .
-git commit -m "lab2: initial pipeline"
-git remote add origin http://root@localhost:8929/root/lab2-mlops.git
-git push -u origin main
-# Пароль при push — тот же ChangeMe-2026!
+cd /путь/к/вашему/mlops_practice
+git remote -v
+# origin   git@github.com:<ваш-логин>/mlops_practice.git  (fetch/push)
 ```
+
+Создайте отдельную ветку для lab2 и положите в неё свои файлы — все в подпапку `lab2/`:
+
+```bash
+git checkout -b lab2/docker-gitlab-ci
+# ... в подпапке lab2/ — ваши .py-скрипты, .gitlab-ci.yml, Dockerfile, requirements.txt
+git add lab2/
+git commit -m "lab2: ML-пайплайн на Docker + GitLab CI"
+```
+
+> **Не коммитьте** в этот репозиторий `gitlab-compose.yml` — это инфраструктура локального GitLab, она живёт у вас в отдельной папке `~/gitlab-local/`. В `lab2/.gitignore` уже исключены артефакты прогона (`data/`, `logs/`, `models/`).
+
+## Шаг 6. Привязать репозиторий к локальному GitLab и запустить pipeline
+
+### Зачем здесь две разные команды push
+
+У вас **один локальный репозиторий** (`mlops_practice`) и **два разных удалённых**:
+
+| Куда | Зачем | Что должно туда уехать |
+|------|-------|------------------------|
+| **GitHub** (`origin`) — ваш форк `mlops_practice` | сдать преподавателю | весь репо: `lab1/`, `lab2/`, `lab3/`, … |
+| **локальный GitLab** (`gitlab`) — проект `lab2-mlops` | прогнать CI | **только** содержимое `lab2/`, причём в КОРНЕ удалённого репо |
+
+Два разных «контракта» — поэтому и команды push разные:
+
+* В **GitHub** уходит всё как есть: `git push origin <ветка>` — обычный push, без хитростей.
+* В **локальный GitLab** нужно отправить только подпапку `lab2/`, *подняв* её содержимое в корень удалённого репо. Иначе там окажется `lab2/.gitlab-ci.yml`, GitLab его не найдёт (он ищет `.gitlab-ci.yml` в корне) и pipeline не запустится. Для этого есть готовая команда — `git subtree push --prefix=lab2 gitlab main`.
+
+`git subtree push` берёт коммиты, которые трогали `lab2/`, переписывает их так, будто `lab2/` всегда был корнем, и пушит в указанный remote. Ваш локальный репо при этом **не меняется** — переписывание происходит «в воздухе», только для отправки.
+
+> Это ровно тот же приём, которым в open-source выкладывают папку из монорепо в самостоятельный публичный репозиторий.
+
+### 6.1. Добавить второй remote
+
+В той же папке вашего форка `mlops_practice` добавьте `gitlab` рядом с GitHub'овским `origin`:
+
+```bash
+git remote add gitlab http://root@localhost:8929/root/lab2-mlops.git
+git remote -v
+# origin   git@github.com:<ваш-логин>/mlops_practice.git           (fetch/push)
+# gitlab   http://root@localhost:8929/root/lab2-mlops.git          (fetch/push)
+```
+
+### 6.2. Push содержимого `lab2/` в локальный GitLab
+
+```bash
+git subtree push --prefix=lab2 gitlab main
+# Username: root
+# Password: ChangeMe-2026!
+```
+
+Что произойдёт:
+1. Git переберёт коммиты, в которых менялись файлы внутри `lab2/`.
+2. Создаст «синтетическую» историю, где каждый коммит — то же самое, но с `lab2/` в качестве корня.
+3. Эту синтетическую историю запушит в `gitlab/main` (default-ветка проекта `lab2-mlops`).
+
+В UI лок. GitLab вы увидите, что в проекте `lab2-mlops` лежат **прямо в корне**: `.gitlab-ci.yml`, `Dockerfile`, `requirements.txt`, ваши `.py` — без подпапки `lab2/`.
 
 GitLab сразу запустит pipeline. Перейдите в проект → **Build** → **Pipelines**.
 
-## Шаг 6. Проверить результаты
+> **Удобный alias** для повторных правок (один раз настроить):
+>
+> ```bash
+> git config alias.lab2-push '!git push gitlab "$(git subtree split --prefix=lab2 HEAD)":main --force'
+> ```
+>
+> Дальше любая итерация — просто `git lab2-push`. Это нужно потому что чистый `git subtree push` иногда падает с `non-fast-forward`, если вы делали `git rebase` или `git commit --amend`. Алиас всегда форсит — для одноразового тестового проекта в локальном GitLab это безопасно.
+
+## Шаг 7. Проверить результаты pipeline
 
 Дождитесь завершения всех стейджей (~2-3 минуты на первом прогоне из-за `pip install`). Все должны быть зелёными:
 
@@ -192,7 +254,7 @@ GitLab сразу запустит pipeline. Перейдите в проект 
 
 > Обратите внимание: статус **Passed** (зелёный) и в колонке **Stages** — три зелёных кружка (`prepare-dataset`, `train`, `test`).
 
-Кликните на job `test` → справа **Job artifacts** → **Browse** — увидите файлы артефактов (например, `logs/`, `models/`):
+Кликните на job `test` → справа **Job artifacts** → **Browse** — увидите файлы артефактов (`logs/`, `models/`):
 
 ![SCREENSHOT-09-test-job-log](screenshots/09-test-job-log.png)
 
@@ -201,6 +263,20 @@ GitLab сразу запустит pipeline. Перейдите в проект 
 ![SCREENSHOT-10-artifacts-browse](screenshots/10-artifacts-browse.png)
 
 > Обратите внимание: вверху бейдж `passed`, ниже — список файлов в `logs/`: `evaluation_report.txt` и `testing.log`. Каждый можно скачать кнопкой справа.
+
+## Шаг 8. Push в GitHub — сдать на проверку
+
+Когда pipeline в локальном GitLab зелёный, **отправьте ветку в GitHub-форк** для финальной сдачи преподавателю — это уже обычный push без subtree:
+
+```bash
+git push origin lab2/docker-gitlab-ci
+```
+
+Здесь нам нужно отправить **весь репозиторий целиком** (с `lab1/`, `lab2/`, `lab3/`…), как обычно — поэтому никакого `--prefix` не нужно.
+
+Откройте PR из ветки `lab2/docker-gitlab-ci` в свой форк или в upstream `mlops_practice` (по правилам преподавателя). В описание PR приложите скриншоты успешного pipeline из локального GitLab (`08-pipeline-all-green.png` и т.п.) — это и есть подтверждение, что CI отработал.
+
+> **Что НЕ должно попасть в GitHub:** `gitlab-compose.yml`, ваш `runner registration token` (`glrt-...`), пароль `ChangeMe-2026!`. Это про ваше тестовое окружение, преподавателю оно не нужно.
 
 ---
 
@@ -212,6 +288,8 @@ GitLab сразу запустит pipeline. Перейдите в проект 
 | `train` | Обучение модели | `models/` |
 | `test` | Метрики и отчёт | `logs/` |
 
+Пути короткие — без префикса `lab2/`, потому что после `git subtree push --prefix=lab2 ...` подпапка `lab2/` в локальном GitLab разворачивается в корень проекта.
+
 `needs:` между job'ами выстраивает DAG, поэтому `train` дожидается `prepare-dataset`, `test` — обоих.
 
 ---
@@ -222,8 +300,11 @@ GitLab сразу запустит pipeline. Перейдите в проект 
 |----------|---------|
 | GitLab не открывается на 8929 | Подождите ещё минуту, GitLab инициализируется до 5 мин на первом старте |
 | Runner offline в UI | Проверьте `docker logs gitlab-runner` |
+| `git subtree push` падает с `Updates were rejected (non-fast-forward)` | Используйте alias из Шага 6.2 (`git lab2-push`) — он делает force push в `gitlab/main`. Для одноразового тестового проекта это безопасно |
+| `git: 'subtree' is not a git command` | На некоторых минимальных сборках git нужен отдельный пакет: `sudo apt install git-subtree` (Debian/Ubuntu); в Git for Windows и macOS он входит из коробки |
+| Pipeline не запустился, файлы в lab2-mlops лежат в подпапке `lab2/` | Вы запушили обычным `git push gitlab HEAD:main` вместо `git subtree push --prefix=lab2 ...`. Удалите проект lab2-mlops в GitLab, создайте заново и пушьте через subtree |
 | Job упал с `Could not resolve host: gitlab` | При регистрации runner забыли `--docker-network-mode gitlab-net`, перерегистрируйте |
-| Job упал на `pip install` | Может тормозить сеть к pypi; перезапустите job (Retry) |
+| Job упал на `pip install` (сетевая ошибка) | Может тормозить сеть к pypi; перезапустите job (Retry) |
 | Push спрашивает пароль и не принимает | Используйте логин `root` и пароль `ChangeMe-2026!` (можно поменять в Settings → Profile) |
 
 ---
